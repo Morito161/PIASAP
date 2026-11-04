@@ -1,0 +1,140 @@
+name: Static security checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate inline JavaScript and security invariants
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import subprocess
+          import tempfile
+
+          html = Path('index.html').read_text(encoding='utf-8')
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.in_script = False
+                  self.scripts = []
+                  self.external = []
+              def handle_starttag(self, tag, attrs):
+                  if tag == 'script':
+                      attrs = dict(attrs)
+                      if 'src' in attrs:
+                          self.external.append(attrs['src'])
+                      else:
+                          self.in_script = True
+              def handle_endtag(self, tag):
+                  if tag == 'script':
+                      self.in_script = False
+              def handle_data(self, data):
+                  if self.in_script:
+                      self.scripts.append(data)
+          parser = Scripts()
+          parser.feed(html)
+          assert parser.scripts, 'Missing application JavaScript'
+          assert 'function escapeHtml(value)' in html, 'Missing HTML escaping'
+          for i in range(8):
+              assert 'escapeHtml(f[' + str(i) + '])' in html, f'Finding field {i} not escaped'
+          assert "printArea.replaceChildren(" in html, 'Print report must use DOM node replacement'
+          assert "printArea').innerHTML" not in html, 'Unsafe print HTML assignment reintroduced'
+          assert "a.download='PIASAP_AUD-005.pdf'" in html, 'PDF must download directly'
+          assert 'URL.revokeObjectURL(url)' in html, 'Blob URL must be released'
+          assert "a.rel='noopener noreferrer'" in html, 'PDF anchor must be isolated'
+          assert 'name="referrer" content="no-referrer"' in html, 'Missing referrer restriction'
+          for field in ('project', 'target', 'scope'):
+              assert f'id="{field}"' in html, f'Missing audit field {field}'
+          assert html.count('maxlength="2000"') >= 3, 'Audit form maxlength missing'
+          assert "el(id).value.length>2000" in html, 'Missing JavaScript length check'
+          assert parser.external == ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js'], 'Unexpected or unpinned external script'
+          assert 'integrity="sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3"' in html, 'Missing pinned jsPDF integrity hash'
+          with tempfile.TemporaryDirectory() as directory:
+              for i, script in enumerate(parser.scripts):
+                  path = Path(directory) / f'inline-{i}.js'
+                  path.write_text(script, encoding='utf-8')
+                  subprocess.run(['node', '--check', str(path)], check=True)
+          print('JavaScript syntax and security invariants passed')
+          print('External scripts:', parser.external)
+          PY
+      - name: Check jsPDF CDN availability and JavaScript response
+        run: |
+          curl --fail --silent --show-error --location --retry 3 --max-time 30 \
+            --proto '=https' --tlsv1.2 \
+            --output /tmp/piasap-jspdf.min.js \
+            'https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js'
+          test "$(wc -c < /tmp/piasap-jspdf.min.js)" -gt 100000
+          node --check /tmp/piasap-jspdf.min.js
+      - name: Generate SHA-384 digest of approved jsPDF release
+        run: |
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          from pathlib import Path
+          data = Path('/tmp/piasap-jspdf.min.js').read_bytes()
+          digest = base64.b64encode(hashlib.sha384(data).digest()).decode()
+          expected = 'qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3'
+          assert digest == expected, 'jsPDF artifact digest mismatch'
+          print('jsPDF SHA-384 integrity verified')
+          PY
+      - name: Smoke-test real PDF generation with jsPDF
+        run: |
+          node <<'JS'
+          const assert = require('node:assert/strict');
+          const { jsPDF } = require('/tmp/piasap-jspdf.min.js');
+          const pdf = new jsPDF({unit:'mm',format:'a4'});
+          pdf.text('PIASAP - Informe de auditoria - DEMO',20,20);
+          const bytes = Buffer.from(pdf.output('arraybuffer'));
+          assert.ok(bytes.length > 500, 'Generated PDF unexpectedly small');
+          assert.equal(bytes.subarray(0,5).toString(), '%PDF-', 'Invalid PDF header');
+          assert.ok(bytes.includes(Buffer.from('%%EOF')), 'Missing PDF end marker');
+          console.log('jsPDF real PDF generation passed:', bytes.length, 'bytes');
+          JS
+      - name: Install Chromium browser test dependencies
+        run: |
+          npm install --no-save --package-lock=false playwright@1.58.2
+          npx playwright install --with-deps chromium
+      - name: Browser smoke test of UI and PDF download
+        run: |
+          node <<'JS'
+          const { chromium } = require('playwright');
+          const assert = require('node:assert/strict');
+          const path = require('node:path');
+          (async () => {
+            const browser = await chromium.launch({headless:true});
+            try {
+              const page = await browser.newPage({acceptDownloads:true});
+              const errors = [];
+              page.on('pageerror', error => errors.push(error.message));
+              await page.goto('file://' + path.resolve('index.html'), {waitUntil:'load'});
+              await page.waitForFunction(() => !!window.jspdf, {timeout:30000});
+              for (const id of ['project','target','scope']) {
+                const limit = await page.locator('#'+id).getAttribute('maxlength');
+                assert.equal(limit,'2000',id+' must enforce length limit');
+              }
+              const downloadPromise = page.waitForEvent('download',{timeout:20000});
+              await page.evaluate(() => openPdf());
+              const download = await downloadPromise;
+              assert.equal(download.suggestedFilename(),'PIASAP_AUD-005.pdf');
+              const file = await download.path();
+              const bytes = require('node:fs').readFileSync(file);
+              assert.equal(bytes.subarray(0,5).toString(),'%PDF-');
+              assert.ok(bytes.length > 1000);
+              await page.evaluate(() => exportPdf());
+              assert.ok(await page.locator('#printArea').locator('h1').count() > 0);
+              assert.deepEqual(errors,[],'Browser JavaScript errors');
+              console.log('Browser UI, PDF download and print content passed');
+            } finally { await browser.close(); }
+          })().catch(error => {console.error(error);process.exit(1)});
+          JS

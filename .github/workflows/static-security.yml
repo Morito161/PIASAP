@@ -52,6 +52,10 @@ jobs:
           assert 'URL.revokeObjectURL(url)' in html, 'Blob URL must be released'
           assert "a.rel='noopener noreferrer'" in html, 'PDF anchor must be isolated'
           assert 'name="referrer" content="no-referrer"' in html, 'Missing referrer restriction'
+          for field in ('project', 'target', 'scope'):
+              assert f'id="{field}"' in html, f'Missing audit field {field}'
+          assert html.count('maxlength="2000"') >= 3, 'Audit form maxlength missing'
+          assert "el(id).value.length>2000" in html, 'Missing JavaScript length check'
           assert parser.external == ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js'], 'Unexpected or unpinned external script'
           assert 'integrity="sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3"' in html, 'Missing pinned jsPDF integrity hash'
           with tempfile.TemporaryDirectory() as directory:

@@ -53,6 +53,7 @@ jobs:
           assert "a.rel='noopener noreferrer'" in html, 'PDF anchor must be isolated'
           assert 'name="referrer" content="no-referrer"' in html, 'Missing referrer restriction'
           assert parser.external == ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js'], 'Unexpected or unpinned external script'
+          assert 'integrity="sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3"' in html, 'Missing pinned jsPDF integrity hash'
           with tempfile.TemporaryDirectory() as directory:
               for i, script in enumerate(parser.scripts):
                   path = Path(directory) / f'inline-{i}.js'
@@ -77,5 +78,7 @@ jobs:
           from pathlib import Path
           data = Path('/tmp/piasap-jspdf.min.js').read_bytes()
           digest = base64.b64encode(hashlib.sha384(data).digest()).decode()
-          print('SRI candidate (verify against independently trusted release): sha384-' + digest)
+          expected = 'qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3'
+          assert digest == expected, 'jsPDF artifact digest mismatch'
+          print('jsPDF SHA-384 integrity verified')
           PY

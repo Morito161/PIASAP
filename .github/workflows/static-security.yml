@@ -69,3 +69,13 @@ jobs:
             'https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js'
           test "$(wc -c < /tmp/piasap-jspdf.min.js)" -gt 100000
           node --check /tmp/piasap-jspdf.min.js
+      - name: Generate SHA-384 digest of approved jsPDF release
+        run: |
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          from pathlib import Path
+          data = Path('/tmp/piasap-jspdf.min.js').read_bytes()
+          digest = base64.b64encode(hashlib.sha384(data).digest()).decode()
+          print('SRI candidate (verify against independently trusted release): sha384-' + digest)
+          PY

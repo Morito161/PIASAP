@@ -48,6 +48,8 @@ jobs:
           assert 'function escapeHtml(value)' in html, 'Missing HTML escaping'
           for i in range(8):
               assert 'escapeHtml(f[' + str(i) + '])' in html, f'Finding field {i} not escaped'
+          assert "printArea.replaceChildren(" in html, 'Print report must use DOM node replacement'
+          assert "printArea').innerHTML" not in html, 'Unsafe print HTML assignment reintroduced'
           assert "a.download='PIASAP_AUD-005.pdf'" in html, 'PDF must download directly'
           assert 'URL.revokeObjectURL(url)' in html, 'Blob URL must be released'
           assert "a.rel='noopener noreferrer'" in html, 'PDF anchor must be isolated'

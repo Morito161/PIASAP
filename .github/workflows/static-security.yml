@@ -52,7 +52,7 @@ jobs:
           assert 'URL.revokeObjectURL(url)' in html, 'Blob URL must be released'
           assert "a.rel='noopener noreferrer'" in html, 'PDF anchor must be isolated'
           assert 'name="referrer" content="no-referrer"' in html, 'Missing referrer restriction'
-          assert all(url.startswith('https://') for url in parser.external), 'Non-HTTPS script detected'
+          assert parser.external == ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js'], 'Unexpected or unpinned external script'
           with tempfile.TemporaryDirectory() as directory:
               for i, script in enumerate(parser.scripts):
                   path = Path(directory) / f'inline-{i}.js'
@@ -61,3 +61,11 @@ jobs:
           print('JavaScript syntax and security invariants passed')
           print('External scripts:', parser.external)
           PY
+      - name: Check jsPDF CDN availability and JavaScript response
+        run: |
+          curl --fail --silent --show-error --location --retry 3 --max-time 30 \
+            --proto '=https' --tlsv1.2 \
+            --output /tmp/piasap-jspdf.min.js \
+            'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js'
+          test "$(wc -c < /tmp/piasap-jspdf.min.js)" -gt 100000
+          node --check /tmp/piasap-jspdf.min.js

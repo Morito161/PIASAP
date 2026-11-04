@@ -86,3 +86,16 @@ jobs:
           assert digest == expected, 'jsPDF artifact digest mismatch'
           print('jsPDF SHA-384 integrity verified')
           PY
+      - name: Smoke-test real PDF generation with jsPDF
+        run: |
+          node <<'JS'
+          const assert = require('node:assert/strict');
+          const { jsPDF } = require('/tmp/piasap-jspdf.min.js');
+          const pdf = new jsPDF({unit:'mm',format:'a4'});
+          pdf.text('PIASAP - Informe de auditoria - DEMO',20,20);
+          const bytes = Buffer.from(pdf.output('arraybuffer'));
+          assert.ok(bytes.length > 500, 'Generated PDF unexpectedly small');
+          assert.equal(bytes.subarray(0,5).toString(), '%PDF-', 'Invalid PDF header');
+          assert.ok(bytes.includes(Buffer.from('%%EOF')), 'Missing PDF end marker');
+          console.log('jsPDF real PDF generation passed:', bytes.length, 'bytes');
+          JS

@@ -48,7 +48,9 @@ jobs:
           assert 'function escapeHtml(value)' in html, 'Missing HTML escaping'
           for i in range(8):
               assert 'escapeHtml(f[' + str(i) + '])' in html, f'Finding field {i} not escaped'
-          assert "a.download='PIASAP_AUD-005.pdf'" in html, 'PDF must download directly'\n          assert 'URL.revokeObjectURL(url)' in html, 'Blob URL must be released'\n          assert "a.rel='noopener noreferrer'" in html, 'PDF anchor must be isolated'
+          assert "a.download='PIASAP_AUD-005.pdf'" in html, 'PDF must download directly'
+          assert 'URL.revokeObjectURL(url)' in html, 'Blob URL must be released'
+          assert "a.rel='noopener noreferrer'" in html, 'PDF anchor must be isolated'
           assert 'name="referrer" content="no-referrer"' in html, 'Missing referrer restriction'
           assert all(url.startswith('https://') for url in parser.external), 'Non-HTTPS script detected'
           with tempfile.TemporaryDirectory() as directory:

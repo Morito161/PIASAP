@@ -67,6 +67,6 @@ function openPdf(){
  h('7. Revalidación');put('Repetir pruebas con identidades autorizadas y no autorizadas.');
  h('8. Dictamen y limitaciones');put('Documento demostrativo. No certifica seguridad ni demuestra explotación real.');
  h('Anexo de trazabilidad temporal');put('Zona horaria ilustrativa: America/Mexico_City (UTC−06:00). Los horarios son ficticios y no proceden de una ejecución.');y+=5;put('PIASAP · JYRI TECH · AUD-005 · DEMO',9);
- const url=URL.createObjectURL(d.output('blob'));const w=window.open(url,'_blank','noopener,noreferrer');if(!w){const a=document.createElement('a');a.href=url;a.download='PIASAP_AUD-005.pdf';a.click()}
+ const blob=d.output('blob');const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='PIASAP_AUD-005.pdf';a.rel='noopener noreferrer';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)
 }
 </script></body></html>

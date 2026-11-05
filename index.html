@@ -19,7 +19,7 @@ const audits=[['AUD-005','Aplicación de Inventarios','26/10/2026','00:12:35'],[
 const findings=[['H-001','Posible control de acceso insuficiente','Alta','GET /api/inventario/102','Una cuenta de prueba podría consultar un registro perteneciente a otro usuario. La observación requiere validación técnica.','GET /api/inventario/102\nSession: usuario_b\nHTTP/1.1 200 OK\nOwner: usuario_a','Comprobar la autorización por objeto en el backend antes de entregar cada registro.','Repetir la solicitud con cuentas autorizadas y no autorizadas; verificar respuestas de acceso denegado.'],['H-002','Cabecera CSP ausente','Media','GET /','La respuesta ilustrativa no incluye una cabecera Content-Security-Policy.','GET /\nHTTP/1.1 200 OK\nContent-Security-Policy: ausente','Definir y probar una política CSP apropiada.','Comprobar la presencia y efectividad de la cabecera.'],['H-003','Información de depuración expuesta','Baja','GET /api/status','Respuesta ficticia con información técnica innecesaria.','GET /api/status\nHTTP/1.1 200 OK\nX-Debug-Info: demo','Eliminar información de depuración en producción.','Comprobar que la respuesta ya no incluye estos datos.']];
 const steps=['Validación del alcance autorizado','Reconocimiento del objetivo','Análisis de seguridad','Correlación y análisis mediante IA','Consolidación de evidencias y reporte'];let step=0,active=false;
 const el=id=>document.getElementById(id);
-const validPages=['home','new','monitor','findings','evidence','ai','report','pdf','history'];let trail=['home'];history.replaceState({piasap:true,trail:['home']},'',location.href);function menu(){el('menu').classList.toggle('open')}function openReport(){const u=new URL(location.href);u.searchParams.set('view','report');window.open(u.href,'_blank','noopener')}function returnToPiasap(){if(new URLSearchParams(location.search).get('view')==='report'){location.href=location.pathname}else{go('home')}}function showPage(id){if(!validPages.includes(id))id='home';document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));el('menu').classList.remove('open');el('backbar').style.display=id==='home'?'none':'block';if(id==='monitor')render();if(id==='report')report('summary');if(id==='evidence')evidence('capture');window.scrollTo(0,0)}function go(id){if(!validPages.includes(id))return;if(trail[trail.length-1]!==id){trail.push(id);history.pushState({piasap:true,trail:trail.slice()},'',location.href)}showPage(id)}function back(){if(trail.length>1){history.back()}else{go('home')}}window.addEventListener('popstate',e=>{if(e.state&&e.state.piasap&&Array.isArray(e.state.trail)){trail=e.state.trail.slice();showPage(trail[trail.length-1]||'home')}else{trail=['home'];showPage('home')}});
+const validPages=['home','new','monitor','findings','evidence','ai','report','pdf','history'];let trail=['home'];history.replaceState({piasap:true,trail:['home']},'',location.href);function menu(){el('menu').classList.toggle('open')}function openReport(){const u=new URL(location.href);u.searchParams.set('view','report');window.open(u.href,'_blank','noopener')}function returnToPiasap(){if(new URLSearchParams(location.search).get('view')==='report'){location.href=location.pathname}else{go('home')}}function showPage(id){if(!validPages.includes(id))id='home';document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));el('menu').classList.remove('open');el('backbar').style.display=id==='home'?'none':'block';if(id==='monitor')render();if(id==='report')report('summary');if(id==='evidence')evidence('capture');window.scrollTo(0,0)}function go(id){if(!validPages.includes(id))return;if(trail[trail.length-1]!==id){trail.push(id);history.pushState({piasap:true,trail:trail.slice()},'',location.href)}showPage(id)}function back(){if(trail.length>1){trail.pop();const previous=trail[trail.length-1]||'home';history.replaceState({piasap:true,trail:trail.slice()},'',location.href);showPage(previous)}else{trail=['home'];history.replaceState({piasap:true,trail:['home']},'',location.href);showPage('home')}}window.addEventListener('popstate',e=>{if(e.state&&e.state.piasap&&Array.isArray(e.state.trail)){trail=e.state.trail.slice();showPage(trail[trail.length-1]||'home')}else{trail=['home'];showPage('home')}});
 el('menu').innerHTML=[['home','Inicio'],['new','Nueva auditoría'],['monitor','Monitoreo'],['findings','Hallazgos'],['evidence','Evidencias'],['ai','Análisis IA'],['report','Reporte web'],['pdf','PDF'],['history','Historial']].map(x=>'<button onclick="go(\''+x[0]+'\')">'+x[1]+'</button>').join('');
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
 function actionButtons(){return '<div class="actions"><button class="btn" onclick="openReport()">◎ Ver web</button><button class="btn alt" onclick="go(\'pdf\')">⇩ Generar PDF</button></div>'}
@@ -53,8 +53,27 @@ function exportPdf(){const markup="<!doctype html><html lang=\"es\"><head><meta 
 function openPdf(){
  if(!window.jspdf){alert('No se pudo cargar el generador PDF. Comprueba tu conexión.');return}
  const d=new window.jspdf.jsPDF({unit:'mm',format:'a4'});let y=20;
- function put(t,size=10,bold=false,center=false,color=[30,55,70]){d.setFont('helvetica',bold?'bold':'normal');d.setFontSize(size);d.setTextColor(...color);for(const line of d.splitTextToSize(t,170)){if(y>272){d.addPage();y=20}d.text(line,center?105:20,y,{align:center?'center':'left'});y+=size*.42+2.4}}
- function h(t){y+=4;put(t,13,true);d.setDrawColor(190,200,205);d.line(20,y-1,190,y-1);y+=4}
+ const left=20,right=190,bottom=275,top=20,contentWidth=right-left;
+ function newPage(){d.addPage();y=top}
+ function ensureHeight(height){if(y+height>bottom)newPage()}
+ function put(t,size=10,bold=false,center=false,color=[30,55,70]){
+   d.setFont('helvetica',bold?'bold':'normal');d.setFontSize(size);d.setTextColor(...color);
+   // Split text using actual rendered font metrics and fixed A4 content margins.
+   const normalized=String(t).replace(/\\s+/g,' ').trim();
+   const maxWidth=center?contentWidth:contentWidth;
+   const lines=d.splitTextToSize(normalized,maxWidth);
+   const lineHeight=size*0.3528*1.4+1.2;
+   for(const line of lines){
+     ensureHeight(lineHeight);
+     d.text(line,center?105:left,y,{align:center?'center':'left',maxWidth:contentWidth});
+     y+=lineHeight;
+   }
+ }
+ function h(t){
+   ensureHeight(19);
+   y+=4;put(t,13,true);
+   d.setDrawColor(190,200,205);d.line(left,y-1,right,y-1);y+=4;
+ }
  put('PIASAP',23,true,true,[22,143,162]);put('Plataforma Inteligente de Auditoría de Seguridad',10,true,true);put('para Aplicaciones y Programas',10,true,true);put('JYRI TECH',11,true,true);put('Informe de auditoría de seguridad de aplicaciones',10,false,true);y+=5;
  d.setFillColor(255,240,230);d.rect(20,y-6,170,11,'F');put('DEMO · DATOS Y EVIDENCIAS SIMULADOS',9,false,true,[150,59,32]);y+=6;
  put('Folio: AUD-005',10,true);put('Proyecto: Aplicación de Inventarios');put('Objetivo: inventario-demo.local');put('Inicio: 26/10/2026 09:00:00');put('Fin: 26/10/2026 09:12:35');put('Duración: 00:12:35');
@@ -66,7 +85,7 @@ function openPdf(){
  h('6. Recomendaciones');put('Validar autorización por objeto en el servidor.');
  h('7. Revalidación');put('Repetir pruebas con identidades autorizadas y no autorizadas.');
  h('8. Dictamen y limitaciones');put('Documento demostrativo. No certifica seguridad ni demuestra explotación real.');
- h('Anexo de trazabilidad temporal');put('Zona horaria ilustrativa: America/Mexico_City (UTC−06:00). Los horarios son ficticios y no proceden de una ejecución.');y+=5;put('PIASAP · JYRI TECH · AUD-005 · DEMO',9);
+ h('Anexo de trazabilidad temporal');put('Zona horaria ilustrativa: America/Mexico_City (UTC-06:00). Los horarios son ficticios y no proceden de una ejecución.');y+=5;put('PIASAP · JYRI TECH · AUD-005 · DEMO',9);
  const blob=d.output('blob');const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='PIASAP_AUD-005.pdf';a.rel='noopener noreferrer';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)
 }
 

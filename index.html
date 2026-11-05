@@ -22,7 +22,7 @@ const el=id=>document.getElementById(id);
 const validPages=['home','new','monitor','findings','evidence','ai','report','pdf','history'];let trail=['home'];history.replaceState({piasap:true,trail:['home']},'',location.href);function menu(){el('menu').classList.toggle('open')}function openReport(){const u=new URL(location.href);u.searchParams.set('view','report');window.open(u.href,'_blank','noopener')}function returnToPiasap(){if(new URLSearchParams(location.search).get('view')==='report'){location.href=location.pathname}else{go('home')}}function showPage(id){if(!validPages.includes(id))id='home';document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));el('menu').classList.remove('open');el('backbar').style.display=id==='home'?'none':'block';if(id==='monitor')render();if(id==='report')report('summary');if(id==='evidence')evidence('capture');window.scrollTo(0,0)}function go(id){if(!validPages.includes(id))return;if(trail[trail.length-1]!==id){trail.push(id);history.pushState({piasap:true,trail:trail.slice()},'',location.href)}showPage(id)}function back(){if(trail.length>1){history.back()}else{go('home')}}window.addEventListener('popstate',e=>{if(e.state&&e.state.piasap&&Array.isArray(e.state.trail)){trail=e.state.trail.slice();showPage(trail[trail.length-1]||'home')}else{trail=['home'];showPage('home')}});
 el('menu').innerHTML=[['home','Inicio'],['new','Nueva auditoría'],['monitor','Monitoreo'],['findings','Hallazgos'],['evidence','Evidencias'],['ai','Análisis IA'],['report','Reporte web'],['pdf','PDF'],['history','Historial']].map(x=>'<button onclick="go(\''+x[0]+'\')">'+x[1]+'</button>').join('');
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
-function actionButtons(){return '<div class="actions"><button class="btn" onclick="go(\'report\')">◎ Ver web</button><button class="btn alt" onclick="go(\'pdf\')">⇩ Generar PDF</button></div>'}
+function actionButtons(){return '<div class="actions"><button class="btn" onclick="openReport()">◎ Ver web</button><button class="btn alt" onclick="go(\'pdf\')">⇩ Generar PDF</button></div>'}
 el('recent').innerHTML=audits.slice(0,3).map(a=>'<div class="entry"><div class="row"><span class="id">'+escapeHtml(a[0])+'</span><span class="status">Finalizada</span></div><strong>'+escapeHtml(a[1])+'</strong><p class="muted">'+escapeHtml(a[2])+' · Duración '+escapeHtml(a[3])+'</p>'+actionButtons()+'</div>').join('');
 el('historyList').innerHTML=[['26/10–01/11/2026',[audits[0]]],['19/10–25/10/2026',[audits[1]]],['05/10–11/10/2026',[audits[2],audits[3]]],['28/09–04/10/2026',[audits[4]]]].map(g=>'<div class="card"><h3>▣ '+escapeHtml(g[0])+'</h3>'+g[1].map(a=>'<div class="entry"><strong>'+escapeHtml(a[0])+' · '+escapeHtml(a[1])+'</strong><p class="muted">'+escapeHtml(a[2])+' · '+escapeHtml(a[3])+'</p>'+actionButtons()+'</div>').join('')+'</div>').join('');
 function start(){const fields=['project','target','scope'];if(fields.some(id=>el(id).value.length>2000)){el('error').textContent='Los campos superan la longitud permitida.';return}if(!el('project').value.trim()||!el('target').value.trim()||!el('scope').value.trim()||!el('authorized').checked){el('error').textContent='Completa los campos y confirma la autorización.';return}el('error').textContent='';el('projectName').textContent=el('project').value.trim();step=0;active=true;el('running').textContent='01';go('monitor')}
@@ -68,5 +68,13 @@ function openPdf(){
  h('8. Dictamen y limitaciones');put('Documento demostrativo. No certifica seguridad ni demuestra explotación real.');
  h('Anexo de trazabilidad temporal');put('Zona horaria ilustrativa: America/Mexico_City (UTC−06:00). Los horarios son ficticios y no proceden de una ejecución.');y+=5;put('PIASAP · JYRI TECH · AUD-005 · DEMO',9);
  const blob=d.output('blob');const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='PIASAP_AUD-005.pdf';a.rel='noopener noreferrer';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)
+}
+
+// La pestaña de informe se abre directamente, sin mostrar la maqueta de acceso.
+if(new URLSearchParams(location.search).get('view')==='report'){
+  document.getElementById('accessPreview').hidden=true;
+  trail=['home','report'];
+  history.replaceState({piasap:true,trail:trail.slice()},'',location.href);
+  showPage('report');
 }
 </script></body></html>
